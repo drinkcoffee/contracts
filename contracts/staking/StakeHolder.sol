@@ -12,14 +12,15 @@ import {AccessControlEnumerableUpgradeable} from "openzeppelin-contracts-upgrade
  */
 contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable {
 
-    error MustStakeMoreThanZero(address _staker);
+    error MustStakeMoreThanZero();
+    error MustDistributeMoreThanZero();
     error UnstakeAmountExceedsBalance(uint256 _amountToUnstake, uint256 _currentStake);
     error RecipientsAmountsMismatch(uint256 _receipientsLength, uint256 _amountsLength);
     error DistributionAmountsDoNotMatchTotal(uint256 _msgValue, uint256 _calculatedTotalDistribution);
 
-    event StakeAdded(uint256 _amountAdded, uint256 _newBalance);
-    event StakeRemoved(uint256 _amountRemoved, uint256 _newBalance);
-    event Distributed(uint256 _totalDistribution, uint256 _numRecipients);
+    event StakeAdded(address _staker, uint256 _amountAdded, uint256 _newBalance);
+    event StakeRemoved(address _staker, uint256 _amountRemoved, uint256 _newBalance);
+    event Distributed(address _distributor, uint256 _totalDistribution, uint256 _numRecipients);
 
     /// @notice Only UPGRADE_ROLE can upgrade the contract
     bytes32 public constant UPGRADE_ROLE = bytes32("UPGRADE_ROLE");
@@ -48,8 +49,9 @@ contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable {
      * @notice Allow any account to stake more value.
      */
     function stake() external payable {
+        // TODO reentrancy guard
         if (msg.value == 0) {
-            revert MustStakeMoreThanZero(msg.sender);
+            revert MustStakeMoreThanZero();
         }
         addStake(msg.sender, msg.value);
     }
@@ -59,13 +61,17 @@ contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable {
      * @param _amountToUnstake Amount of stake to remove.
      */
     function unstake(uint256 _amountToUnstake) external {
+        // TODO reentrancy guard
         uint256 currentStake = balances[msg.sender];
         if (currentStake < _amountToUnstake) {
             revert UnstakeAmountExceedsBalance(_amountToUnstake, currentStake);
         }
         uint256 newBalance = currentStake - _amountToUnstake;
         balances[msg.sender] = newBalance;
-        emit StakeRemoved(_amountToUnstake, newBalance);
+
+        // TODO send the money
+        
+        emit StakeRemoved(msg.sender, _amountToUnstake, newBalance);
     }
 
 
@@ -73,6 +79,11 @@ contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable {
      * @notice Any account can distribute tokens to any set of accounts.
      */
     function distributeRewards(address[] calldata _receipients, uint256[] calldata _amounts) external payable {
+        // TODO reentrancy guard
+        if (msg.value == 0) {
+            revert MustDistributeMoreThanZero();
+        }
+
         uint256 len = _receipients.length;
         if (len != _amounts.length) {
             revert RecipientsAmountsMismatch(len, _amounts.length);
@@ -86,7 +97,7 @@ contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable {
         if (total != msg.value) {
             revert DistributionAmountsDoNotMatchTotal(msg.value, total);
         }
-        emit Distributed(msg.value, len);
+        emit Distributed(msg.sender, msg.value, len);
     }
 
 
@@ -114,7 +125,7 @@ contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable {
         }
         uint256 newBalance = currentStake + _amount;
         balances[_account] = newBalance;
-        emit StakeAdded(_amount, newBalance);
+        emit StakeAdded(_account, _amount, newBalance);
 
     }
 
