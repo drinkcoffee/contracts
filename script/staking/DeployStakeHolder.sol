@@ -4,6 +4,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {StakeHolder} from "../../contracts/staking/StakeHolder.sol";
 
 /**
@@ -27,18 +28,16 @@ interface IDeployer {
 struct DeploymentArgs {
     address signer;
     address factory;
-    string salt;
+    string salt1;
+    string salt2;
 }
 
-struct GemGameContractArgs {
-    address defaultAdmin;
-    address pauser;
-    address unpauser;
+struct StakeHolderContractArgs {
+    address roleAdmin;
+    address upgradeAdmin;
 }
 
-contract DeployGemGame is Test {
-    event GemEarned(address indexed account, uint256 timestamp);
-
+contract DeployStakeHolder is Test {
     function testDeploy() external {
         /// @dev Fork the Immutable zkEVM testnet for this test
         string memory rpcURL = "https://rpc.testnet.immutable.com";
@@ -48,74 +47,85 @@ contract DeployGemGame is Test {
         DeploymentArgs memory deploymentArgs = DeploymentArgs({
             signer: 0xdDA0d9448Ebe3eA43aFecE5Fa6401F5795c19333,
             factory: 0x37a59A845Bb6eD2034098af8738fbFFB9D589610,
-            salt: "salty"
+            salt1: "salt1",
+            salt2: "salt2"
         });
 
-        GemGameContractArgs memory gemGameContractArgs = GemGameContractArgs({
-            pauser: makeAddr("pause"),
-            unpauser: makeAddr("unpause"),
-            defaultAdmin: makeAddr("admin")
+        StakeHolderContractArgs memory stakeHolderContractArgs = StakeHolderContractArgs({
+            roleAdmin: makeAddr("role"),
+            upgradeAdmin: makeAddr("upgrade")
         });
 
         // Run deployment against forked testnet
-        GemGame deployedGemGameContract = _deploy(deploymentArgs, gemGameContractArgs);
+        StakeHolder deployedContract = _deploy(deploymentArgs, stakeHolderContractArgs);
 
-        assertEq(true, deployedGemGameContract.hasRole(keccak256("PAUSE"), gemGameContractArgs.pauser));
-        assertEq(true, deployedGemGameContract.hasRole(keccak256("UNPAUSE"), gemGameContractArgs.unpauser));
+        assertEq(true, deployedContract.hasRole(keccak256("UPGRADE"), stakeHolderContractArgs.upgradeAdmin));
         assertEq(
             true,
-            deployedGemGameContract.hasRole(
-                deployedGemGameContract.DEFAULT_ADMIN_ROLE(), gemGameContractArgs.defaultAdmin
+            deployedContract.hasRole(
+                deployedContract.DEFAULT_ADMIN_ROLE(), stakeHolderContractArgs.roleAdmin
             )
         );
 
         // The DEFAULT_ADMIN_ROLE should be revoked from the deployer account
         assertEq(
-            false, deployedGemGameContract.hasRole(deployedGemGameContract.DEFAULT_ADMIN_ROLE(), deploymentArgs.signer)
+            false, deployedContract.hasRole(deployedContract.DEFAULT_ADMIN_ROLE(), deploymentArgs.signer)
         );
-
-        // Earn a gem
-        vm.expectEmit(true, true, false, false);
-        emit GemEarned(address(this), block.timestamp);
-        deployedGemGameContract.earnGem();
     }
 
     function deploy() external {
         address signer = vm.envAddress("DEPLOYER_ADDRESS");
         address factory = vm.envAddress("OWNABLE_CREATE3_FACTORY_ADDRESS");
-        address defaultAdmin = vm.envAddress("DEFAULT_ADMIN");
-        address pauser = vm.envAddress("PAUSER");
-        address unpauser = vm.envAddress("UNPAUSER");
-        string memory salt = vm.envString("GEM_GAME_SALT");
+        address roleAdmin = vm.envAddress("ROLE_ADMIN");
+        address upgradeAdmin = vm.envAddress("UPGRADE_ADMIN");
+        string memory salt1 = vm.envString("IMPL_SALT");
+        string memory salt2 = vm.envString("PROXY_SALT");
 
-        DeploymentArgs memory deploymentArgs = DeploymentArgs({signer: signer, factory: factory, salt: salt});
+        DeploymentArgs memory deploymentArgs = DeploymentArgs({signer: signer, factory: factory, salt1: salt1, salt2: salt2});
 
-        GemGameContractArgs memory gemGameContractArgs =
-            GemGameContractArgs({defaultAdmin: defaultAdmin, pauser: pauser, unpauser: unpauser});
+        StakeHolderContractArgs memory stakeHolderContractArgs =
+            StakeHolderContractArgs({roleAdmin: roleAdmin, upgradeAdmin: upgradeAdmin});
 
-        _deploy(deploymentArgs, gemGameContractArgs);
+        _deploy(deploymentArgs, stakeHolderContractArgs);
     }
 
-    function _deploy(DeploymentArgs memory deploymentArgs, GemGameContractArgs memory gemGameContractArgs)
+    function _deploy(DeploymentArgs memory deploymentArgs, StakeHolderContractArgs memory stakeHolderContractArgs)
         internal
-        returns (GemGame gemGameContract)
+        returns (StakeHolder stakeHolderContract)
     {
         IDeployer ownableCreate3 = IDeployer(deploymentArgs.factory);
 
+        // Deploy StakeHolder via the Ownable Create3 factory.
+        // That is: StakeHolder impl = new StakeHolder();
         // Create deployment bytecode and encode constructor args
         bytes memory deploymentBytecode = abi.encodePacked(
-            type(GemGame).creationCode,
-            abi.encode(gemGameContractArgs.defaultAdmin, gemGameContractArgs.pauser, gemGameContractArgs.unpauser)
+            type(StakeHolder).creationCode
         );
-
-        bytes32 saltBytes = keccak256(abi.encode(deploymentArgs.salt));
+        bytes32 saltBytes = keccak256(abi.encode(deploymentArgs.salt1));
 
         /// @dev Deploy the contract via the Ownable CREATE3 factory
         vm.startBroadcast(deploymentArgs.signer);
-
-        address gemGameContractAddress = ownableCreate3.deploy(deploymentBytecode, saltBytes);
-        gemGameContract = GemGame(gemGameContractAddress);
-
+        address stakeHolderImplAddress = ownableCreate3.deploy(deploymentBytecode, saltBytes);
         vm.stopBroadcast();
+
+        // Create init data for teh ERC1967 Proxy
+        bytes memory initData = abi.encodeWithSelector(
+            StakeHolder.initialize.selector, stakeHolderContractArgs.roleAdmin, stakeHolderContractArgs.upgradeAdmin
+        );
+
+        // Deploy ERC1967Proxy via the Ownable Create3 factory.
+        // That is: ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
+        // Create deployment bytecode and encode constructor args
+        deploymentBytecode = abi.encodePacked(
+            type(ERC1967Proxy).creationCode,
+            abi.encode(stakeHolderImplAddress, initData)
+        );
+        saltBytes = keccak256(abi.encode(deploymentArgs.salt2));
+
+        /// @dev Deploy the contract via the Ownable CREATE3 factory
+        vm.startBroadcast(deploymentArgs.signer);
+        address stakeHolderContractAddress = ownableCreate3.deploy(deploymentBytecode, saltBytes);
+        vm.stopBroadcast();
+        stakeHolderContract = StakeHolder(stakeHolderContractAddress);
     }
 }
