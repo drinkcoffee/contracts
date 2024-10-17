@@ -5,14 +5,12 @@ pragma solidity ^0.8.20;
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable-4.9.3/proxy/utils/UUPSUpgradeable.sol";
 import {AccessControlEnumerableUpgradeable} from
     "openzeppelin-contracts-upgradeable-4.9.3/access/AccessControlEnumerableUpgradeable.sol";
-import {ReentrancyGuardUpgradeable} from
-    "openzeppelin-contracts-upgradeable-4.9.3/security/ReentrancyGuardUpgradeable.sol";
 
 /**
  * @title StakeHolder: allows anyone to stake any amount of native IMX and to then remove all or part of that stake.
  * @dev The StakeHolder contract is designed to be upgradeable.
  */
-contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
+contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable {
     /// @notice Error: Attempting to stake with zero value.
     error MustStakeMoreThanZero();
 
@@ -67,8 +65,10 @@ contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable, Ree
     /**
      * @notice Allow any account to stake more value.
      * @dev The amount being staked is the value of msg.value.
+     * @dev This function does not need re-entrancy guard as the add stake
+     *  mechanism does not call out to any external function.
      */
-    function stake() external payable nonReentrant {
+    function stake() external payable {
         if (msg.value == 0) {
             revert MustStakeMoreThanZero();
         }
@@ -77,9 +77,11 @@ contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable, Ree
 
     /**
      * @notice Allow any account to remove some or all of their own stake.
+     * @dev This function does not need re-entrancy guard as the state is updated
+     *  prior to the call to the user's wallet.
      * @param _amountToUnstake Amount of stake to remove.
      */
-    function unstake(uint256 _amountToUnstake) external nonReentrant {
+    function unstake(uint256 _amountToUnstake) external {
         uint256 currentStake = balances[msg.sender];
         if (currentStake < _amountToUnstake) {
             revert UnstakeAmountExceedsBalance(_amountToUnstake, currentStake);
@@ -95,13 +97,14 @@ contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable, Ree
     /**
      * @notice Any account can distribute tokens to any set of accounts.
      * @dev The total amount to distribute must match msg.value.
+     *  This function does not need re-entrancy guard as the distribution mechanism 
+     *  does not call out to another contract.
      * @param _recipients An array of recipients to distribute value to.
      * @param _amounts An array of amounts to be distributed to each recipient.
      */
     function distributeRewards(address[] calldata _recipients, uint256[] calldata _amounts)
         external
         payable
-        nonReentrant
     {
         // Initial validity checks
         if (msg.value == 0) {
