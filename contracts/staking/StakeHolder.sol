@@ -99,7 +99,7 @@ contract StakeHolder is AccessControlEnumerableUpgradeable, UUPSUpgradeable {
      *      this function attempting a malicious upgrade.
      * @ param _data ABI encoded data to be used as part of the contract storage upgrade.
      */
-    function upgradeStorage(bytes memory /* _data */) external view {
+    function upgradeStorage(bytes memory /* _data */) external virtual {
         revert CanNotUpgradeToV0(version);
     }
 

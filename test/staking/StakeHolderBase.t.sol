@@ -4,6 +4,7 @@
 
 pragma solidity ^0.8.19;
 
+// solhint-disable-next-line no-global-import
 import "forge-std/Test.sol";
 import {StakeHolder} from "../../contracts/staking/StakeHolder.sol";
 
