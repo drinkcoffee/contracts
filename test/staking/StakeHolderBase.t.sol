@@ -21,9 +21,19 @@ contract StakeHolderBaseTest is Test {
     address public roleAdmin;
     address public upgradeAdmin;
 
+    address public staker1;
+    address public staker2;
+    address public staker3;
+    address public bank;
+
     function setUp() public {
         roleAdmin = makeAddr("RoleAdmin");
         upgradeAdmin = makeAddr("UpgradeAdmin");
+
+        staker1 = makeAddr("Staker1");
+        staker2 = makeAddr("Staker2");
+        staker3 = makeAddr("Staker3");
+        bank = makeAddr("bank");
 
         StakeHolder impl = new StakeHolder();
 
