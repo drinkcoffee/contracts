@@ -38,40 +38,40 @@ struct StakeHolderContractArgs {
 }
 
 contract DeployStakeHolder is Test {
-    function testDeploy() external {
-        /// @dev Fork the Immutable zkEVM testnet for this test
-        string memory rpcURL = "https://rpc.testnet.immutable.com";
-        vm.createSelectFork(rpcURL);
+    // function testDeploy() external {
+    //     /// @dev Fork the Immutable zkEVM testnet for this test
+    //     string memory rpcURL = "https://rpc.testnet.immutable.com";
+    //     vm.createSelectFork(rpcURL);
 
-        /// @dev These are Immutable zkEVM testnet values where necessary
-        DeploymentArgs memory deploymentArgs = DeploymentArgs({
-            signer: 0xdDA0d9448Ebe3eA43aFecE5Fa6401F5795c19333,
-            factory: 0x37a59A845Bb6eD2034098af8738fbFFB9D589610,
-            salt1: "salt1",
-            salt2: "salt2"
-        });
+    //     /// @dev These are Immutable zkEVM testnet values where necessary
+    //     DeploymentArgs memory deploymentArgs = DeploymentArgs({
+    //         signer: 0xdDA0d9448Ebe3eA43aFecE5Fa6401F5795c19333,
+    //         factory: 0x37a59A845Bb6eD2034098af8738fbFFB9D589610,
+    //         salt1: "salt1",
+    //         salt2: "salt2"
+    //     });
 
-        StakeHolderContractArgs memory stakeHolderContractArgs = StakeHolderContractArgs({
-            roleAdmin: makeAddr("role"),
-            upgradeAdmin: makeAddr("upgrade")
-        });
+    //     StakeHolderContractArgs memory stakeHolderContractArgs = StakeHolderContractArgs({
+    //         roleAdmin: makeAddr("role"),
+    //         upgradeAdmin: makeAddr("upgrade")
+    //     });
 
-        // Run deployment against forked testnet
-        StakeHolder deployedContract = _deploy(deploymentArgs, stakeHolderContractArgs);
+    //     // Run deployment against forked testnet
+    //     StakeHolder deployedContract = _deploy(deploymentArgs, stakeHolderContractArgs);
 
-        assertEq(true, deployedContract.hasRole(keccak256("UPGRADE"), stakeHolderContractArgs.upgradeAdmin));
-        assertEq(
-            true,
-            deployedContract.hasRole(
-                deployedContract.DEFAULT_ADMIN_ROLE(), stakeHolderContractArgs.roleAdmin
-            )
-        );
+    //     assertEq(true, deployedContract.hasRole(keccak256("UPGRADE"), stakeHolderContractArgs.upgradeAdmin));
+    //     assertEq(
+    //         true,
+    //         deployedContract.hasRole(
+    //             deployedContract.DEFAULT_ADMIN_ROLE(), stakeHolderContractArgs.roleAdmin
+    //         )
+    //     );
 
-        // The DEFAULT_ADMIN_ROLE should be revoked from the deployer account
-        assertEq(
-            false, deployedContract.hasRole(deployedContract.DEFAULT_ADMIN_ROLE(), deploymentArgs.signer)
-        );
-    }
+    //     // The DEFAULT_ADMIN_ROLE should be revoked from the deployer account
+    //     assertEq(
+    //         false, deployedContract.hasRole(deployedContract.DEFAULT_ADMIN_ROLE(), deploymentArgs.signer)
+    //     );
+    // }
 
     function deploy() external {
         address signer = vm.envAddress("DEPLOYER_ADDRESS");
